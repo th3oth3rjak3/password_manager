@@ -1,7 +1,9 @@
-use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{Center, Element, Fill};
+use chrono::{DateTime, Duration, Local, Utc};
+use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::{Center, Element, Fill, Length};
 
-use crate::{login_page::LoginPage, traits::PageView};
+use crate::login_page::LoginPage;
+use crate::traits::PageView;
 
 mod login_page;
 mod traits;
@@ -9,38 +11,60 @@ mod traits;
 #[derive(Debug, Clone)]
 pub enum Message {
     NavigateTo(Page),
-    OtherThing,
+    Tick,
+    LoginSuccess,
+    LoginPasswordChanged(String),
+    LoginRequested,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum Page {
-    #[default]
-    Home,
     LoginPage(LoginPage),
+}
+
+impl Default for Page {
+    fn default() -> Self {
+        Page::LoginPage(LoginPage::default())
+    }
 }
 
 #[derive(Default)]
 pub struct PasswordManager {
     current_page: Page,
+    session_expiry: Option<DateTime<Utc>>,
 }
 
 impl PasswordManager {
     pub fn view(&self) -> Element<'_, Message> {
         let page_content = match &self.current_page {
-            Page::Home => self.home_view(),
-            Page::LoginPage(login) => login.view(),
+            Page::LoginPage(login) => login.view(self),
         };
 
+        // Build column first
+        let mut sidebar_column = column![
+            button("Login").on_press(Message::NavigateTo(Page::LoginPage(LoginPage::default())))
+        ];
+
+        sidebar_column = sidebar_column.push(Space::with_height(Fill));
+
+        // Conditionally render expiration or not logged in
+        if let Some(expiry) = self.session_expiry {
+            sidebar_column = sidebar_column.push(text("Login Expiration:"));
+            sidebar_column = sidebar_column.push(text(format!(
+                "{}",
+                expiry.with_timezone(&chrono::Local).format("%-I:%M %p")
+            )));
+        } else {
+            sidebar_column = sidebar_column.push(text("Not Logged In"));
+        }
+
+        // Now wrap it into container
         let sidebar = container(
-            column![
-                button("Home").on_press(Message::NavigateTo(Page::Home)),
-                button("Login")
-                    .on_press(Message::NavigateTo(Page::LoginPage(LoginPage::default())))
-            ]
-            .spacing(10)
-            .padding(10)
-            .width(200)
-            .align_x(Center),
+            sidebar_column
+                .spacing(10)
+                .padding(10)
+                .width(200)
+                .align_x(Center),
         )
         .style(container::rounded_box)
         .height(Fill);
@@ -51,28 +75,22 @@ impl PasswordManager {
     }
 
     pub fn update(&mut self, message: Message) {
-        if let Message::NavigateTo(page) = message {
-            self.current_page = page;
-            return;
-        }
-
-        match &mut self.current_page {
-            Page::Home => self.home_update(message),
-            Page::LoginPage(login) => {
-                if let Some(message) = login.update(&message) {
-                    self.home_update(message)
-                }
+        match message {
+            Message::NavigateTo(page) => self.current_page = page,
+            Message::Tick => {
+                todo!("verify auth expiry");
             }
-        }
-    }
-
-    fn home_view(&self) -> Element<'_, Message> {
-        column![text("Home Page"),].into()
-    }
-
-    fn home_update(&mut self, message: Message) {
-        if let Message::OtherThing = message {
-            eprintln!("Other Thing Called");
+            Message::LoginSuccess => {
+                self.session_expiry = Some(Utc::now() + Duration::minutes(5));
+            }
+            _ => match &mut self.current_page {
+                Page::LoginPage(login) => {
+                    let result = login.update(&message);
+                    if let Some(message) = result {
+                        self.update(message);
+                    }
+                }
+            },
         }
     }
 }
