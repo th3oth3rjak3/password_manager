@@ -1,6 +1,6 @@
-use chrono::{DateTime, Duration, Local, Utc};
+use chrono::{DateTime, Duration, Utc};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Center, Element, Fill, Length};
+use iced::{Center, Element, Fill};
 
 use crate::login_page::LoginPage;
 use crate::traits::PageView;

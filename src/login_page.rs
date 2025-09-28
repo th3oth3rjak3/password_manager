@@ -15,7 +15,7 @@ impl PageView for LoginPage {
     fn view(&'_ self, app_state: &PasswordManager) -> iced::Element<'_, crate::Message> {
         let mut password_field = text_input("Enter Password", &self.password);
 
-        if let None = app_state.session_expiry {
+        if app_state.session_expiry.is_none() {
             password_field = password_field
                 .on_input(Message::LoginPasswordChanged)
                 .on_submit(Message::LoginRequested)
