@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Center, Element, Fill};
+use iced::{Center, Element, Fill, Subscription, time};
 
 use crate::login_page::LoginPage;
 use crate::traits::PageView;
@@ -15,6 +15,7 @@ pub enum Message {
     LoginSuccess,
     LoginPasswordChanged(String),
     LoginRequested,
+    SessionExpired,
 }
 
 #[derive(Debug, Clone)]
@@ -40,14 +41,12 @@ impl PasswordManager {
             Page::LoginPage(login) => login.view(self),
         };
 
-        // Build column first
         let mut sidebar_column = column![
             button("Login").on_press(Message::NavigateTo(Page::LoginPage(LoginPage::default())))
         ];
 
         sidebar_column = sidebar_column.push(Space::with_height(Fill));
 
-        // Conditionally render expiration or not logged in
         if let Some(expiry) = self.session_expiry {
             sidebar_column = sidebar_column.push(text("Login Expiration:"));
             sidebar_column = sidebar_column.push(text(format!(
@@ -58,7 +57,6 @@ impl PasswordManager {
             sidebar_column = sidebar_column.push(text("Not Logged In"));
         }
 
-        // Now wrap it into container
         let sidebar = container(
             sidebar_column
                 .spacing(10)
@@ -75,30 +73,45 @@ impl PasswordManager {
     }
 
     pub fn update(&mut self, message: Message) {
-        match message {
-            Message::NavigateTo(page) => self.current_page = page,
+        match &message {
+            Message::NavigateTo(page) => self.current_page = page.clone(),
             Message::Tick => {
-                todo!("verify auth expiry");
-            }
-            Message::LoginSuccess => {
-                self.session_expiry = Some(Utc::now() + Duration::minutes(5));
-            }
-            _ => match &mut self.current_page {
-                Page::LoginPage(login) => {
-                    let result = login.update(&message);
-                    if let Some(message) = result {
-                        self.update(message);
+                if let Some(expiry) = self.session_expiry {
+                    if Utc::now() > expiry {
+                        self.session_expiry = None;
                     }
                 }
-            },
+            }
+            Message::LoginSuccess => {
+                self.session_expiry = Some(Utc::now() + Duration::seconds(10));
+            }
+            _ => {}
+        }
+
+        match &mut self.current_page {
+            Page::LoginPage(login) => {
+                let result = login.update(&message);
+                if let Some(message) = result {
+                    self.update(message);
+                }
+            }
+        }
+    }
+
+    pub fn logout_subscription(&self) -> Subscription<Message> {
+        match self.session_expiry {
+            None => Subscription::none(),
+            Some(_) => time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
         }
     }
 }
 
 fn main() -> iced::Result {
-    iced::run(
+    iced::application(
         "Password Manager",
         PasswordManager::update,
         PasswordManager::view,
     )
+    .subscription(PasswordManager::logout_subscription)
+    .run()
 }
