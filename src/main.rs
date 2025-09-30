@@ -3,10 +3,8 @@ use std::sync::OnceLock;
 
 use chrono::{DateTime, Duration, Utc};
 use directories::UserDirs;
-use iced::border::Radius;
-use iced::widget::container::Style;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Border, Center, Element, Fill, Subscription, color, theme, time};
+use iced::{Center, Element, Fill, Subscription, theme, time};
 
 pub use services::*;
 
@@ -63,62 +61,17 @@ pub struct PasswordManager {
     current_page: Page,
     session_expiry: Option<DateTime<Utc>>,
     logged_in: bool,
+    // TODO: add all of the necessary state from loading the file, if we can't load the file, let's error and quit.
+    // TODO: see https://github.com/iced-rs/iced/blob/master/examples/pokedex/src/main.rs for examples about Task<Message>
 }
 
 impl PasswordManager {
     pub fn view(&self) -> Element<'_, Message> {
-        // TODO: break the layout stuff into its own function
-
         // TODO: check to see if the password file is loaded or not, if not we need the user to set a master password, so show the master password creation page.
 
-        let page_content = match &self.current_page {
-            Page::LoginPage(login) => login.view(self),
-            Page::VaultPage(vault) => vault.view(self),
-            Page::SetMasterPassword(set_pw) => set_pw.view(self),
-        };
+        let content = container(scrollable(page_content(self)).height(Fill)).padding(10);
 
-        let mut sidebar_column = column![];
-
-        // show other buttons when logged in.
-        if self.logged_in {
-            sidebar_column = sidebar_column.push(
-                button("Vault")
-                    .on_press(Message::NavigateTo(Page::VaultPage(VaultPage::default()))),
-            );
-        }
-
-        sidebar_column = sidebar_column.push(Space::with_height(Fill));
-
-        if self.logged_in {
-            sidebar_column = sidebar_column.push(button("Lock").on_press(Message::Logout))
-        }
-
-        if let Some(expiry) = self.session_expiry {
-            sidebar_column = sidebar_column.push(text("Login Expiration:"));
-            sidebar_column = sidebar_column.push(text(format!(
-                "{}",
-                expiry.with_timezone(&chrono::Local).format("%-I:%M %p")
-            )));
-        } else {
-            sidebar_column = sidebar_column.push(text("Not Logged In"));
-        }
-
-        let sidebar = container(
-            sidebar_column
-                .spacing(10)
-                .padding(10)
-                .width(200)
-                .align_x(Center),
-        )
-        .height(Fill);
-
-        let content = container(scrollable(page_content).height(Fill)).padding(10);
-        let divider = container(column![])
-            .height(Fill)
-            .width(1)
-            .style(container::bordered_box);
-
-        column![row![sidebar, divider, content]].into()
+        column![row![sidebar(self), divider(), content]].into()
     }
 
     pub fn update(&mut self, message: Message) {
@@ -166,5 +119,58 @@ impl PasswordManager {
         let ticker = time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick);
 
         Subscription::batch([ticker])
+    }
+}
+
+pub fn sidebar(state: &PasswordManager) -> Element<'_, Message> {
+    let mut sidebar_column = column![];
+
+    // show other buttons when logged in.
+    if state.logged_in {
+        sidebar_column = sidebar_column.push(
+            button("Vault").on_press(Message::NavigateTo(Page::VaultPage(VaultPage::default()))),
+        );
+    }
+
+    sidebar_column = sidebar_column.push(Space::with_height(Fill));
+
+    if state.logged_in {
+        sidebar_column = sidebar_column.push(button("Lock").on_press(Message::Logout))
+    }
+
+    if let Some(expiry) = state.session_expiry {
+        sidebar_column = sidebar_column.push(text("Login Expiration:"));
+        sidebar_column = sidebar_column.push(text(format!(
+            "{}",
+            expiry.with_timezone(&chrono::Local).format("%-I:%M %p")
+        )));
+    } else {
+        sidebar_column = sidebar_column.push(text("Not Logged In"));
+    }
+
+    container(
+        sidebar_column
+            .spacing(10)
+            .padding(10)
+            .width(200)
+            .align_x(Center),
+    )
+    .height(Fill)
+    .into()
+}
+
+pub fn divider() -> Element<'static, Message> {
+    container(column![])
+        .height(Fill)
+        .width(1)
+        .style(container::bordered_box)
+        .into()
+}
+
+pub fn page_content(state: &PasswordManager) -> Element<'_, Message> {
+    match &state.current_page {
+        Page::LoginPage(login) => login.view(state),
+        Page::VaultPage(vault) => vault.view(state),
+        Page::SetMasterPassword(set_pw) => set_pw.view(state),
     }
 }
