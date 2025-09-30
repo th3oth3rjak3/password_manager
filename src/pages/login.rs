@@ -1,21 +1,19 @@
-use crate::{Message, PasswordManager, traits::PageView};
-use iced::{
-    color,
-    widget::{column, text, text_input},
+use crate::{
+    Message, PasswordManager, notifications::Notification, password_service, traits::PageView,
 };
+use iced::widget::{column, text, text_input};
 
 #[derive(Debug, Default, Clone)]
 pub struct LoginPage {
     password: String,
-    success_message: Option<String>,
-    error_message: Option<String>,
+    notification: Option<Notification>,
 }
 
 impl PageView for LoginPage {
     fn view(&'_ self, app_state: &PasswordManager) -> iced::Element<'_, crate::Message> {
         let mut password_field = text_input("Enter Password", &self.password);
 
-        if app_state.session_expiry.is_none() {
+        if !app_state.logged_in {
             password_field = password_field
                 .on_input(Message::LoginPasswordChanged)
                 .on_submit(Message::LoginRequested)
@@ -24,14 +22,8 @@ impl PageView for LoginPage {
 
         let mut col = column![password_field];
 
-        if let Some(success) = &self.success_message {
-            let success_color = color!(0x53A653);
-            col = col.push(text(success).color(success_color))
-        }
-
-        if let Some(error) = &self.error_message {
-            let error_color = color!(0xB00020);
-            col = col.push(text(error).color(error_color))
+        if let Some(notification) = &self.notification {
+            col = col.push(text(&notification.msg).color(notification.color()));
         }
 
         col.into()
@@ -45,15 +37,26 @@ impl PageView for LoginPage {
                 self.password = pw.to_owned();
             }
             Message::LoginRequested => {
-                // check the pw to see if the user entered it right, then emit a new message somehow...
+                // TODO: create and integrate a password service
                 if self.password == "hello" {
                     self.password = "".into();
-                    self.error_message = None;
-                    self.success_message = Some("Logged in!".into());
+                    self.notification = Some(Notification::success("Login Successful!", 10));
                     return_value = Some(Message::LoginSuccess)
                 } else {
-                    self.success_message = None;
-                    self.error_message = Some("Invalid password, please try again".into());
+                    self.notification = Some(Notification::error(
+                        "Invalid password, please try again",
+                        10,
+                    ));
+                }
+            }
+            Message::Tick => {
+                if let Some(mut notification) = self.notification.take() {
+                    if notification.elapsed + 1 == notification.duration {
+                        self.notification = None;
+                    } else {
+                        notification.elapsed += 1;
+                        self.notification = Some(notification);
+                    }
                 }
             }
             _ => {}
