@@ -3,8 +3,10 @@ use std::sync::OnceLock;
 
 use chrono::{DateTime, Duration, Utc};
 use directories::UserDirs;
+use iced::border::Radius;
+use iced::widget::container::Style;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Center, Element, Fill, Subscription, time};
+use iced::{Border, Center, Element, Fill, Subscription, color, theme, time};
 
 pub use services::*;
 
@@ -39,6 +41,7 @@ fn main() -> iced::Result {
         PasswordManager::view,
     )
     .subscription(PasswordManager::subscription)
+    .theme(|_| theme::Theme::CatppuccinMocha)
     .run()
 }
 
@@ -107,12 +110,15 @@ impl PasswordManager {
                 .width(200)
                 .align_x(Center),
         )
-        .style(container::rounded_box)
         .height(Fill);
 
         let content = container(scrollable(page_content).height(Fill)).padding(10);
+        let divider = container(column![])
+            .height(Fill)
+            .width(1)
+            .style(container::bordered_box);
 
-        column![row![sidebar, content]].into()
+        column![row![sidebar, divider, content]].into()
     }
 
     pub fn update(&mut self, message: Message) {
